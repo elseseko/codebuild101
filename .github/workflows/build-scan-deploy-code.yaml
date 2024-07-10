@@ -1,0 +1,56 @@
+name: buliding,scaning and deploying code to tomcat
+
+on: 
+    push:
+        branches:
+            - main 
+
+jobs: 
+    build-and-upload-arfifact:
+        runs-on: ubuntu-latest 
+
+        steps: 
+            - name: clone repository to github runner 
+              uses: actions/checkout@v3
+            - name: install and setup maven and java within our github runner 
+              uses: actions/setup-java@v3
+              with:
+                distribution: "adopt"
+                java-version: "11"
+            - name: bulid artifact with maven 
+              run: mvn clean package 
+            - name: upload artifact into gtihub packages 
+              uses: actions/upload-artifact@v3
+              with:
+                name: webapp
+                path: target/*.war
+
+    deploy_artifact:
+        runs-on: ubuntu-latest 
+        needs: build-and-upload-arfifact
+
+        steps:
+            - name: clone repository 
+              uses: actions/checkout@v3
+            - name: install and setup maven and java within our github runner 
+              uses: actions/setup-java@v3
+              with:
+                distribution: "adopt"
+                java-version: "11"
+            - name: download the artifact we uploaded into github packages 
+              uses: actions/download-artifact@v3
+              with:
+                name: webapp
+                path: ~/
+            - name: run sonarqueb to scan the code 
+              run: |
+                mvn sonar:sonar \
+                  -Dsonar.projectKey=scan_code \
+                  -Dsonar.host.url=http://54.227.65.34:9000 \
+                  -Dsonar.login=5367b0b97c3f502b77be046d0ec3be404d649abe
+
+            - name: push artifact into maven 
+              run: |
+                echo "${{secrets.KEY_PAIR}}" > ~/key_pair.pem
+                chmod 400 ~/key_pair.pem
+                sudo scp -i ~/key_pair.pem -o strictHostKeyChecking=no ~/*.war ec2-user@54.156.84.204:/opt/tomcat9/webapps         
